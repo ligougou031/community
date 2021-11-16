@@ -6,6 +6,7 @@ import com.nowcoder.community.entity.LoginTicket;
 import com.nowcoder.community.entity.User;
 import com.nowcoder.community.util.CommunityConstant;
 import com.nowcoder.community.util.CommunityUtil;
+import com.nowcoder.community.util.HostHolder;
 import com.nowcoder.community.util.MailClient;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,9 @@ public class UserService implements CommunityConstant {
 
     @Autowired
     private LoginTicketMapper loginTicketMapper;
+
+    @Autowired
+    private HostHolder hostHolder;
 
     @Value("${community.path.domain}")
     private String domain;
@@ -127,7 +131,6 @@ public class UserService implements CommunityConstant {
         if (StringUtils.isBlank(password)) {
             map.put("passwordMsg", "密码不能为空");
             return map;
-
         }
 
         // 验证账号
@@ -145,8 +148,8 @@ public class UserService implements CommunityConstant {
 
         // 验证密码
         password = CommunityUtil.md5(password + user.getSalt());
-        if (user.getPassword().equals(password)){
-            map.put("passwordMsg","密码不正确");
+        if (!user.getPassword().equals(password)) {
+            map.put("passwordMsg", "密码不正确");
             return map;
         }
 
@@ -158,14 +161,50 @@ public class UserService implements CommunityConstant {
         loginTicket.setExpired(new Date(System.currentTimeMillis() + expiredSeconds * 1000));
         loginTicketMapper.insertLoginTicket(loginTicket);
 
-        map.put("ticket",loginTicket.getTicket());
+        map.put("ticket", loginTicket.getTicket());
 
         return map;
     }
 
-    public void logout(String ticket){
-        loginTicketMapper.updateStatus(ticket,1);
+    public void logout(String ticket) {
+        loginTicketMapper.updateStatus(ticket, 1);
     }
 
+    public LoginTicket findLoginTicket(String ticket) {
+        return loginTicketMapper.selectByTicket(ticket);
+    }
+
+    public int updateHeader(int userId, String headerUrl) {
+        return userMapper.updateHeader(userId, headerUrl);
+    }
+
+    public Map<String,Object> updatePassword(int userId,String oldPassword,String newPassword){
+        Map<String,Object> map = new HashMap<>();
+
+        // 空值处理
+        if(StringUtils.isBlank(oldPassword)){
+            map.put("oldPasswordMsg","请输入原始密码");
+            return map;
+        }
+        if(StringUtils.isBlank(oldPassword)){
+            map.put("newPasswordMsg","请输入新密码");
+            return map;
+        }
+
+        // 判断旧密码是否正确
+        User user = hostHolder.getUser();
+        String password = CommunityUtil.md5(oldPassword + user.getSalt());
+        if (!user.getPassword().equals(password)){
+            map.put("oldPasswordMsg","旧密码输入错误");
+            return map;
+        }else {
+            password = CommunityUtil.md5(newPassword + hostHolder.getUser().getSalt());
+            // 修改密码
+            userMapper.updatePassword(userId,password);
+            return map;
+        }
+
+
+    }
 
 }
